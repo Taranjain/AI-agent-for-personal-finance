@@ -1,0 +1,312 @@
+import { Request, Response } from "express";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import UserModel, { IUserDocument } from "../models/userModel";
+import { sendEmail } from "../utils/sendEmail";
+import { getEnv } from "../config/env";
+import { HttpError } from "../middleware/httpError";
+
+const buildCookieOptions = (env: ReturnType<typeof getEnv>, maxAgeMs: number) => ({
+  httpOnly: true,
+  secure: env.COOKIE_SECURE,
+  sameSite: env.COOKIE_SAME_SITE,
+  domain: env.COOKIE_DOMAIN,
+  maxAge: maxAgeMs,
+  path: "/",
+});
+
+// Helper function to generate and set the JWT cookie
+const generateAndSetToken = (res: Response, userId: string) => {
+  const env = getEnv();
+  const token = jwt.sign({ id: userId }, env.JWT_SECRET, {
+    expiresIn: "1d",
+  });
+  res.cookie("jwt", token, buildCookieOptions(env, 24 * 60 * 60 * 1000));
+};
+
+export const getCsrfToken = async (req: Request, res: Response) => {
+  const env = getEnv();
+  const token = crypto.randomBytes(32).toString("hex");
+
+  res.cookie(env.CSRF_COOKIE_NAME, token, {
+    httpOnly: false,
+    secure: env.COOKIE_SECURE,
+    sameSite: env.COOKIE_SAME_SITE,
+    domain: env.COOKIE_DOMAIN,
+    maxAge: 2 * 60 * 60 * 1000,
+    path: "/",
+  });
+
+  res.status(200).json({ csrf_token: token, request_id: req.requestId });
+};
+
+// --- Register a new user ---
+export const register = async (req: Request, res: Response) => {
+  const env = getEnv();
+  const { name, email, password, phoneNumber, referralCode } = req.body as {
+    name: string;
+    email: string;
+    password: string;
+    phoneNumber?: string;
+    referralCode?: string;
+  };
+
+  const userExists = await UserModel.findOne({ email }).select("_id").lean();
+  if (userExists) {
+    throw new HttpError(400, "USER_EXISTS", "User with this email already exists");
+  }
+
+  const newUser = await UserModel.create({
+    name,
+    email,
+    password,
+    phoneNumber,
+    authProvider: "email",
+    pendingReferralCode: referralCode ? String(referralCode).trim().toUpperCase() : undefined,
+  });
+
+  const verificationToken = crypto.randomInt(100000, 999999).toString();
+  newUser.emailVerificationToken = verificationToken;
+  newUser.emailVerificationTokenExpires = new Date(Date.now() + 10 * 60 * 1000);
+  await newUser.save();
+
+  const emailResult = await sendEmail({
+    to: email,
+    subject: "Your Personal Finance Email Verification Code",
+    text: `Your verification code is: ${verificationToken}`,
+    html: `<p>Your verification code is: <strong>${verificationToken}</strong></p>`,
+  });
+  const smokeTestMode = req.header("x-smoke-test") === "1";
+
+  res.status(201).json({
+    message: "Registration successful. Please check your email for a verification code.",
+    request_id: req.requestId,
+    dev_otp:
+      env.NODE_ENV !== "production" && (emailResult.mode === "console" || smokeTestMode)
+        ? verificationToken
+        : undefined,
+  });
+};
+
+// --- Verify User's Email with OTP ---
+export const verifyEmail = async (req: Request, res: Response) => {
+  const { email, otp } = req.body as { email: string; otp: string };
+
+  const user = await UserModel.findOne({
+    email,
+    emailVerificationToken: otp,
+    emailVerificationTokenExpires: { $gt: Date.now() },
+  }).select("+emailVerificationToken +emailVerificationTokenExpires");
+
+  if (!user) {
+    throw new HttpError(400, "INVALID_OTP", "Invalid or expired OTP.");
+  }
+
+  user.isEmailVerified = true;
+  user.emailVerificationToken = undefined;
+  user.emailVerificationTokenExpires = undefined;
+  await user.save();
+
+  generateAndSetToken(res, user._id.toString());
+  res.status(200).json({
+    id: user._id.toString(),
+    name: user.name,
+    email: user.email,
+    photoURL: user.photoURL,
+    request_id: req.requestId,
+  });
+};
+
+// --- Resend the Verification OTP ---
+export const resendVerification = async (req: Request, res: Response) => {
+  const env = getEnv();
+  const { email } = req.body as { email: string };
+
+  const user = await UserModel.findOne({
+    email,
+    authProvider: "email",
+    isEmailVerified: false,
+  }).select("+emailVerificationToken +emailVerificationTokenExpires");
+
+  if (!user) {
+    throw new HttpError(400, "USER_NOT_FOUND", "User not found or has already been verified.");
+  }
+
+  const verificationToken = crypto.randomInt(100000, 999999).toString();
+  user.emailVerificationToken = verificationToken;
+  user.emailVerificationTokenExpires = new Date(Date.now() + 10 * 60 * 1000);
+  await user.save();
+
+  const emailResult = await sendEmail({
+    to: email,
+    subject: "Your New Personal Finance Verification Code",
+    text: `Your new verification code is: ${verificationToken}`,
+    html: `<p>Your new verification code is: <strong>${verificationToken}</strong></p>`,
+  });
+  const smokeTestMode = req.header("x-smoke-test") === "1";
+
+  res.status(200).json({
+    message: "Verification code resent successfully.",
+    request_id: req.requestId,
+    dev_otp:
+      env.NODE_ENV !== "production" && (emailResult.mode === "console" || smokeTestMode)
+        ? verificationToken
+        : undefined,
+  });
+};
+
+// --- Login with Email & Password ---
+export const login = async (req: Request, res: Response) => {
+  const { email, password } = req.body as { email: string; password: string };
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const normalizedPassword = String(password || "");
+
+  // Brute-force protection: check lockout before doing any DB work
+  const { accountLockout, lockoutKey } = require("../services/accountLockout");
+  const { auditFromRequest } = require("../services/auditService");
+  const key = lockoutKey(normalizedEmail, req.ip);
+  const lockStatus = accountLockout.isLocked(key);
+
+  if (lockStatus.locked) {
+    auditFromRequest(req, "account_locked", {
+      metadata: { email: normalizedEmail, remainingMs: lockStatus.remainingMs },
+    });
+    const minutes = Math.ceil(lockStatus.remainingMs / 60000);
+    throw new HttpError(
+      429,
+      "ACCOUNT_LOCKED",
+      `Account temporarily locked due to too many failed attempts. Try again in ${minutes} minute(s).`,
+    );
+  }
+
+  const user = await UserModel.findOne({ email: normalizedEmail }).select("+password");
+  if (!user || !user.password) {
+    accountLockout.recordFailure(key);
+    auditFromRequest(req, "login_failed", { metadata: { email: normalizedEmail, reason: "user_not_found" } });
+    throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid email or password.");
+  }
+
+  if (user.authProvider === "google") {
+    throw new HttpError(400, "GOOGLE_AUTH_REQUIRED", "This account uses Google sign-in. Please continue with Google.");
+  }
+
+  const isPasswordValid = await bcrypt.compare(normalizedPassword, user.password);
+  if (!isPasswordValid) {
+    accountLockout.recordFailure(key);
+    auditFromRequest(req, "login_failed", {
+      userId: user._id,
+      metadata: { email: normalizedEmail, reason: "wrong_password" },
+    });
+    throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid email or password.");
+  }
+
+  if (!user.isEmailVerified) {
+    throw new HttpError(
+      403,
+      "EMAIL_NOT_VERIFIED",
+      "Email not verified. Please verify your email before logging in."
+    );
+  }
+
+  // Success — clear lockout counter
+  accountLockout.recordSuccess(key);
+  auditFromRequest(req, "login_success", { userId: user._id });
+
+  generateAndSetToken(res, user._id.toString());
+  res.status(200).json({
+    id: user._id.toString(),
+    name: user.name,
+    email: user.email,
+    photoURL: user.photoURL,
+    twoFactorEnabled: !!(user as any).twoFactorEnabled,
+    request_id: req.requestId,
+  });
+};
+
+// --- Google OAuth Callback ---
+export const getGoogleCallback = (req: Request, res: Response) => {
+  const user = req.user as IUserDocument; 
+  generateAndSetToken(res, user._id.toString());
+  const clientUrl = getEnv().CLIENT_URL.replace(/\/$/, "");
+  res.redirect(`${clientUrl}/chat`);
+};
+
+// --- Get Current User's Profile ---
+export const getProfile = (req: Request, res: Response) => {
+  const user = req.user as IUserDocument;
+  res.json({
+    id: user._id.toString(),
+    name: user.name,
+    email: user.email,
+    photoURL: user.photoURL,
+    phoneNumber: (user as any).phoneNumber || null,
+    authProvider: user.authProvider || "email",
+    isEmailVerified: user.isEmailVerified ?? false,
+    request_id: req.requestId,
+  });
+};
+
+// --- Update Profile ---
+export const updateProfile = async (req: Request, res: Response) => {
+  const user = req.user as IUserDocument;
+  const { name, phoneNumber } = req.body as { name?: string; phoneNumber?: string };
+
+  if (name !== undefined) user.name = String(name).trim();
+  if (phoneNumber !== undefined) (user as any).phoneNumber = String(phoneNumber).trim();
+
+  await user.save();
+
+  res.json({
+    user: {
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      photoURL: user.photoURL,
+      phoneNumber: (user as any).phoneNumber || null,
+    },
+    message: "Profile updated successfully",
+    request_id: req.requestId,
+  });
+};
+
+// --- Change Password ---
+export const changePassword = async (req: Request, res: Response) => {
+  const user = await UserModel.findById((req.user as IUserDocument)._id).select("+password");
+  if (!user || !user.password) {
+    throw new HttpError(400, "CANNOT_CHANGE_PASSWORD", "Cannot change password for this account.");
+  }
+
+  const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };
+
+  const isValid = await bcrypt.compare(currentPassword, user.password);
+  if (!isValid) {
+    throw new HttpError(401, "INVALID_PASSWORD", "Current password is incorrect.");
+  }
+
+  if (newPassword.length < 8) {
+    throw new HttpError(400, "WEAK_PASSWORD", "New password must be at least 8 characters.");
+  }
+
+  user.password = await bcrypt.hash(newPassword, 12);
+  await user.save();
+
+  res.json({
+    success: true,
+    message: "Password changed successfully",
+    request_id: req.requestId,
+  });
+};
+
+// --- Logout ---
+export const logout = (req: Request, res: Response) => {
+  const env = getEnv();
+  res.clearCookie("jwt", {
+    httpOnly: true,
+    secure: env.COOKIE_SECURE,
+    sameSite: env.COOKIE_SAME_SITE,
+    domain: env.COOKIE_DOMAIN,
+    path: "/",
+  });
+  res.status(200).json({ message: "Logged out successfully", request_id: req.requestId });
+};
