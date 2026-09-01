@@ -12,6 +12,6 @@
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*"],
+  "files": ["src/simpleServer.ts"],
   "exclude": ["node_modules"]
 }

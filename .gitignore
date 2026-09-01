@@ -23,6 +23,7 @@ observability/.env
 .tmp/
 
 node_modules
+data/
 client/node_modules/
 server/node_modules/
 dist

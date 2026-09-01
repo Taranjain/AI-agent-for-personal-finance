@@ -1,208 +1,207 @@
-<div align="center">
-  <h1>💰 Personal Finance Application</h1>
-  <p><strong>Enterprise-Grade Financial Intelligence, Automation, and Management Platform</strong></p>
-</div>
+# FinWise: Personal Finance with LangGraph AI
 
-Welcome to the **Personal Finance Application**, a comprehensive full-stack platform for managing and analyzing your finances. This application uses advanced multi-agent AI algorithms and a modern tech stack to help you aggregate, analyze, predict, and automate your financial life.
+FinWise is a focused personal-finance application for tracking everyday income and expenses, understanding cash flow, and receiving AI-assisted financial guidance. Its simple dashboard keeps the important information in one place: transaction history, income, expenses, balance, and a financial copilot.
 
-Designed for individuals, households, and small organizations, the platform brings enterprise-grade financial tools, automation, and intelligent insights to personal finance management.
+The application combines a React interface, a lightweight Express API, local transaction storage, and a Python AI Core powered by LangGraph.
 
----
+## Features
 
-## What This Application Does
+- **Income and expense tracking**: add, view, and remove transactions from one dashboard.
+- **Live financial summary**: see total income, total expenses, current balance, and transaction count immediately.
+- **Local data storage**: transactions are stored in `server/data/transactions.json`, making the project easy to run and inspect locally.
+- **AI financial copilot**: ask questions such as “Where can I reduce spending?”, “How should I plan my budget?”, or “Which debt should I pay first?”.
+- **Financial context awareness**: the API sends the copilot the current transaction list and calculated financial summary with every question.
+- **Multi-agent analysis**: LangGraph routes questions to specialized financial agents or runs a complete financial review when needed.
+- **Deterministic fallback guidance**: the AI Core can provide structured financial guidance even when a live LLM provider is not configured.
 
-This application fundamentally changes how you interact with your money:
+## Technology
 
-- **Automation**: Schedule recurring transactions, trigger-based workflows, and use AI Autopilot to simulate and execute financial plans.
-- **AI Assistance**: Chat with specialized AI agents (Investments, Debt, Budgeting, Income) that analyze your financial data and generate actionable insights.
-- **Team Collaboration**: Work together with family or team members using shared workspaces, real-time activity feeds, and role-based access control.
-- **Extensibility**: Build and install plugins to extend functionality with a secure sandbox environment.
+| Layer | Technology | Purpose |
+| --- | --- | --- |
+| Web interface | React 18, TypeScript, Vite | Responsive dashboard and copilot experience. |
+| API | Node.js, Express 5, TypeScript | Transaction API, local storage, financial summaries, and AI Core communication. |
+| Data | Local JSON file | Stores personal transactions in a transparent, easy-to-back-up format. |
+| AI service | Python, FastAPI | Receives finance context and returns structured AI analysis. |
+| Agent orchestration | LangGraph | Routes each request through the right financial agents and combines their output. |
+| LLM providers | Gemini and supported compatible providers | Optional natural-language narrative generation. |
 
----
+## Project structure
 
-## Key Features
-
-### Core Financial Management
-
-- **Dashboard**: Customizable command center showing your financial vitals (Net Worth, Cash Flow, Burn Rate) through interactive charts.
-- **Transactions**: Full CRUD operations with rich metadata, categorization, attachments, and bulk actions.
-- **Accounts**: Manage synchronized balances across Checking, Savings, Credit Cards, Loans, and Investments.
-- **Budgeting**: Envelope-style budgeting with period-based tracking, rollovers, and alerts.
-- **Recurring Payments**: Automatic detection and management of subscriptions and bills.
-
-### AI-Powered Financial Copilot
-
-Powered by Google Gemini and LangGraph, the AI system provides:
-
-- **Expense Analysis**: Detects spending anomalies and identifies hidden subscriptions.
-- **Budget Planning**: Recommends fund reallocation based on spending patterns.
-- **Debt & Investment Optimization**: Proposes debt payoff strategies and investment rebalancing.
-- **Receipt Scanning**: Upload receipt photos; AI extracts vendors, amounts, and creates transactions automatically.
-- **Auto-Pilot**: AI drafts multi-step financial plans (e.g., "Move $500 to savings"), and you review and approve execution.
-
-### Collaboration & Workspaces
-
-- **Multi-Tenant Workspaces**: Create isolated environments for different households or businesses.
-- **Access Control**: Owner, Admin, and Member roles with specific permissions.
-- **Activity Feed**: Real-time timeline of financial events across the organization.
-- **Comments & Annotations**: Discuss transactions, goals, and budgets with threaded conversations.
-
-### Workflows & Automation
-
-- **Category Rules**: Auto-categorize transactions using regex or matching patterns.
-- **Event-Driven Actions**: Trigger custom actions based on events (e.g., low balance alerts).
-- **Scheduled Jobs**: Background tasks for data aggregation and reconciliation.
-
-### Plugin System
-
-- **Plugin Marketplace**: Install third-party extensions in a secure sandbox environment.
-- **API Access**: Generate API keys for custom tools and external integrations.
-- **Webhooks**: Real-time state updates via HMAC-authenticated webhooks.
-
-### Security
-
-- **Authentication**: JWT with Google OAuth2 and password hashing.
-- **Two-Factor Authentication**: TOTP with recovery codes.
-- **Protection**: Brute-force prevention, rate limiting, CSRF protection.
-- **Audit Logging**: Complete trail of system events for 365 days.
-
-### Data & Export
-
-- **Export Options**: CSV ledgers and PDF reports for tax preparation.
-- **Monitoring**: Prometheus metrics and OpenTelemetry tracing support.
-
----
-
-## Tech Stack
-
-### Frontend
-
-- **React 18** with Vite
-- **TypeScript 5+**
-- **Tailwind CSS** + Radix UI components (shadcn/ui style)
-- **Zustand** for state management
-- **React Query** for data fetching
-- **React Hook Form** + Zod for forms
-- **Recharts** for visualizations
-- **Framer Motion** for animations
-- **Wouter** for routing
-
-### Backend
-
-- **Node.js** with Express.js
-- **TypeScript 5+**
-- **MongoDB** (Mongoose) - 48 domain models
-- **Redis** + BullMQ for background jobs
-- **Passport.js** for authentication
-- **Zod** for validation
-- **Pino** for logging
-
-### AI Core (Python)
-
-- **Python 3.11+**
-- **LangGraph/LangChain** for agent orchestration
-- **Google Gemini** for AI tasks
-- **FastAPI** for internal service
-
----
-
-## Project Structure
-
-```
-personal-finance/
-├── client/                     # React Frontend
-│   ├── src/                    # Components, Hooks, Pages
-│   └── package.json
-├── server/                     # Node.js Backend
-│   ├── AI_Core/                # Python AI Service
-│   │   ├── agents/             # AI agent definitions
-│   │   └── main.py             # FastAPI server
+```text
+AI-agent-for-personal-finance/
+├── client/                 React + Vite dashboard
 │   └── src/
-│       ├── config/             # Configuration
-│       ├── controllers/        # REST handlers
-│       ├── middleware/         # Express middleware
-│       ├── models/             # Database models
-│       ├── services/           # Business logic
-│       └── worker/             # Background jobs
-├── packages/                   # Shared packages
-├── docs/                       # Documentation guides
+│       ├── App.tsx         Main finance dashboard and copilot UI
+│       └── index.css       Responsive interface styling
+├── server/                 Express API
+│   ├── src/
+│   │   └── simpleServer.ts Transaction and AI proxy endpoints
+│   └── data/               Local transaction data (created at runtime)
+├── server/AI_Core/         Python LangGraph AI service
+│   ├── agents/             Financial specialist agents
+│   ├── graph/              LangGraph workflow and shared state
+│   ├── tools/              Financial calculations and plan building
+│   └── api_service.py      FastAPI service entry point
 └── README.md
 ```
 
----
+## How FinWise works
 
-## Documentation
+1. You add an income or expense in the browser.
+2. The React app sends the transaction to the Express API.
+3. The API saves the transaction locally and returns the updated summary.
+4. When you ask the copilot a question, the API sends your question and financial context to AI Core.
+5. LangGraph selects the best specialist agent, or runs a complete multi-agent analysis.
+6. The resulting guidance is returned to the dashboard.
 
-| Document | Description |
-|----------|-------------|
-| [System Architecture](./docs/ARCHITECTURE.md) | Subsystem design and data flow |
-| [Setup Guide](./docs/SETUP.md) | Local development setup |
-| [API Reference](./docs/API.md) | REST API endpoints |
-| [Database Models](./docs/DATABASE.md) | MongoDB schemas |
-| [AI Core](./docs/AI_CORE.md) | AI system internals |
-| [Frontend](./docs/FRONTEND.md) | Component architecture |
-| [Security](./docs/SECURITY.md) | Security measures |
-| [Deployment](./docs/DEPLOYMENT.md) | Deployment guides |
+```mermaid
+flowchart LR
+    U[User] --> UI[React dashboard]
+    UI --> API[Express API]
+    API --> DATA[Local transactions JSON]
+    API --> AI[FastAPI AI Core]
+    AI --> LG[LangGraph workflow]
+    LG --> AGENTS[Financial agents]
+    AGENTS --> AI
+    AI --> API
+    API --> UI
+```
 
----
+## LangGraph multi-agent workflow
 
-## Getting Started
+The AI Core uses a LangGraph `StateGraph` defined in [workflow.py](server/AI_Core/graph/workflow.py). Each request starts with the master agent, which determines the type of financial help required. LangGraph then follows a conditional edge to the appropriate specialist node.
+
+For broader financial questions, LangGraph runs a comprehensive analysis that calls the income/expense, budget, investment, and debt agents before a final synthesis step.
+
+```mermaid
+flowchart TD
+    START[Question and financial profile] --> MASTER[Master financial strategist]
+    MASTER -->|Cash flow analysis| INCOME[Income and expense analyzer]
+    MASTER -->|Budget planning| BUDGET[Budget planner]
+    MASTER -->|Investment guidance| INVEST[Investment advisor]
+    MASTER -->|Debt strategy| DEBT[Debt optimizer]
+    MASTER -->|Financial explanation| EDUCATE[Financial educator]
+    MASTER -->|Full financial review| COMPLETE[Comprehensive analysis]
+    COMPLETE --> INCOME
+    COMPLETE --> BUDGET
+    COMPLETE --> INVEST
+    COMPLETE --> DEBT
+    INCOME --> SYNTHESIS[Master synthesis]
+    BUDGET --> SYNTHESIS
+    INVEST --> SYNTHESIS
+    DEBT --> SYNTHESIS
+    SYNTHESIS --> RESPONSE[Financial guidance]
+    EDUCATE --> RESPONSE
+```
+
+### Agents used
+
+| Agent | What it does |
+| --- | --- |
+| **Master Financial Strategist** | Reads the question, identifies the analysis type, routes work through LangGraph, and combines specialist output into a practical response. |
+| **Income and Expense Analyzer** | Reviews transactions, calculates cash flow, finds spending patterns, and highlights possible pressure points. |
+| **Budget Planner** | Creates a spending and savings plan based on income, expenses, goals, and financial priorities. |
+| **Investment Advisor** | Produces educational, risk-aware investment guidance using the supplied financial profile. |
+| **Debt Optimizer** | Evaluates debts and recommends a repayment approach, such as avalanche or snowball, based on balances and interest rates. |
+| **Financial Educator** | Explains financial concepts in plain language when the user asks a learning-oriented question. |
+
+### How an agent response is created
+
+Each AI request contains the user’s question, transactions, income, expenses, balance, savings estimate, debt details, goals, risk tolerance, and time horizon. The master agent classifies the request and LangGraph carries the shared state between nodes. Specialist agents use that state to calculate insights. For analysis requests, the master synthesis node turns the individual results into a single action-oriented financial plan.
+
+The response can include a summary, key insights, suggested next steps, priorities, and a workflow trace showing which agents participated.
+
+## Running locally
 
 ### Prerequisites
 
-- Node.js v18+
-- MongoDB 6.0+
-- Redis 7.0+
-- Python 3.11+ (optional, for AI features)
+- Node.js 18 or later
+- Python 3.11 or later for AI features
+- An optional LLM provider API key for live AI narratives
 
-### Installation
+From the project root, these shortcuts are also available:
 
-1. **Backend:**
-```bash
-cd server
-npm install
-cp .env.example .env
+```powershell
+npm run dev:server
+npm run dev:client
+npm run build
+npm run check
 ```
 
-2. **Frontend:**
-```bash
-cd client
-npm install
-cp .env.example .env
-```
+### 1. Start the Express API
 
-### Running Locally
-
-**Terminal 1 - Backend:**
-```bash
+```powershell
 cd server
+npm ci
 npm run dev
-# API: http://localhost:3000
 ```
 
-**Terminal 2 - Frontend:**
-```bash
+The API runs on `http://localhost:3000`. Visit `http://localhost:3000/health` to confirm it is ready.
+
+### 2. Start the LangGraph AI Core
+
+```powershell
+cd server/AI_Core
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn api_service:app --host 127.0.0.1 --port 8001
+```
+
+To enable a live provider, create `server/AI_Core/.env`:
+
+```env
+GEMINI_API_KEY=your_api_key_here
+```
+
+The AI Core also supports provider configuration such as `LLM_PROVIDER` and `LLM_MODEL`. See [settings.py](server/AI_Core/config/settings.py) for the available provider keys and defaults.
+
+### 3. Start the React dashboard
+
+```powershell
 cd client
+npm ci
+Copy-Item .env.example .env
 npm run dev
-# UI: http://localhost:5173
 ```
 
----
+Open `http://localhost:5173` in your browser.
 
-## Testing
+## API reference
 
-**Server tests:**
-```bash
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Returns API status and configured AI Core URL. |
+| `GET` | `/api/transactions` | Returns all transactions and the current financial summary. |
+| `POST` | `/api/transactions` | Saves a transaction with `description`, `amount`, `kind`, and `date`. |
+| `DELETE` | `/api/transactions/:id` | Removes a transaction. |
+| `POST` | `/api/ai/analyze` | Sends a `question` and current financial context to the LangGraph AI Core. |
+
+Example transaction request:
+
+```json
+{
+  "description": "Monthly salary",
+  "amount": 65000,
+  "kind": "income",
+  "date": "2026-09-01"
+}
+```
+
+## Quality checks
+
+The current simplified application has been verified with:
+
+```powershell
 cd server
-npm test
+npm run check
+
+cd ../client
+npm run build
 ```
 
-**Client tests:**
-```bash
-cd client
-npm test
-```
+The API health endpoint and transaction create/delete flow were also smoke-tested locally.
 
-<div align="center">
-  <p>Built with ❤️ for financial clarity and independence.</p>
-</div>
+## Financial guidance notice
+
+FinWise helps organize financial data and generate educational guidance. Review recommendations carefully before making financial, investment, tax, or legal decisions.

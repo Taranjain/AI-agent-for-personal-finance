@@ -25,6 +25,5 @@
       "@/*": ["./src/*"]
     }
   },
-  // This tells TypeScript to check BOTH your app code and your config file
-  "include": ["src", "vite.config.ts"]
+  "include": ["src/main.tsx", "src/App.tsx", "vite.config.ts"]
 }
