@@ -1,0 +1,64 @@
+# ============================================================
+# FinWise — Docker Compose
+# ============================================================
+# Quick Start:
+#   1. cp backend/.env.example backend/.env   (add your GOOGLE_API_KEY)
+#   2. docker compose up --build
+#   3. Open http://localhost:5173
+# ============================================================
+
+services:
+  # ── PostgreSQL Database ─────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: finwise-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: finwise
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d finwise"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Python Backend (FastAPI + LangGraph) ────────────────────
+  backend:
+    build: ./backend
+    container_name: finwise-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/finwise
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ── React Frontend (Vite) ──────────────────────────────────
+  frontend:
+    build: ./frontend
+    container_name: finwise-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
